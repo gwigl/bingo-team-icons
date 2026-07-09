@@ -258,11 +258,11 @@ public class BingoTeamIconsPlugin extends Plugin
 			name = "Player";
 		}
 
-		client.addChatMessage(ChatMessageType.CLAN_CHAT, name, "Test chat message", "Bingo");
+		client.addChatMessage(ChatMessageType.CLAN_CHAT, name, "Test chat message", "bingo-test");
 		client.addChatMessage(ChatMessageType.CLAN_MESSAGE, "",
-			name + " received a drop: Twisted bow (1,644,105,262 coins).", null);
+			name + " received a drop: Twisted bow (1,644,105,262 coins).", "bingo-test");
 		client.addChatMessage(ChatMessageType.CLAN_MESSAGE, "",
-			name + " received a new collection log item: Twisted bow (472/1,568)", null);
+			name + " received a new collection log item: Twisted bow (472/1,568)", "bingo-test");
 	}
 
 	/**
