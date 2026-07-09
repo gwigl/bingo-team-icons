@@ -7,7 +7,7 @@ public class BingoTeamIconsPluginTest
 {
 	public static void main(String[] args) throws Exception
 	{
-		ExternalPluginManager.loadBuiltin(BingoTeamIconsPlugin.class, BingoTeamIconsTestPlugin.class);
+		ExternalPluginManager.loadBuiltin(BingoTeamIconsPlugin.class);
 		RuneLite.main(args);
 	}
 }

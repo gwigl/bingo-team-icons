@@ -7,3 +7,7 @@ build
 nbactions.xml
 nb-configuration.xml
 nbproject/
+# local-only dev helpers, not part of the published plugin
+/run-bingo-client.bat
+src/test/java/com/bingoteamicons/BingoTeamIconsTestPlugin.java
+src/test/java/com/bingoteamicons/BingoTeamIconsLocalTest.java
