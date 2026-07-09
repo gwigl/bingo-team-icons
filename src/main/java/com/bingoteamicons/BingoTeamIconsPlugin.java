@@ -6,6 +6,8 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatLineBuffer;
@@ -48,6 +50,16 @@ public class BingoTeamIconsPlugin extends Plugin
 		ChatMessageType.PRIVATECHATOUT,
 		ChatMessageType.MODPRIVATECHAT
 	);
+
+	private static final Set<ChatMessageType> BROADCAST_TYPES = EnumSet.of(
+		ChatMessageType.CLAN_MESSAGE,
+		ChatMessageType.CLAN_GUEST_MESSAGE,
+		ChatMessageType.CLAN_GIM_MESSAGE
+	);
+
+	// "Player received a drop: ..." / "Player received a new collection log item: ..."
+	private static final Pattern BROADCAST_PATTERN = Pattern.compile(
+		"^(.+?) received (?:a drop|a new collection log item):");
 
 	@Inject
 	private Client client;
@@ -145,12 +157,14 @@ public class BingoTeamIconsPlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
-		if (!PLAYER_CHAT_TYPES.contains(event.getType()))
+		if (PLAYER_CHAT_TYPES.contains(event.getType()))
 		{
-			return;
+			tagMessageNode(event.getMessageNode());
 		}
-
-		tagMessageNode(event.getMessageNode());
+		else if (BROADCAST_TYPES.contains(event.getType()))
+		{
+			tagBroadcastNode(event.getMessageNode());
+		}
 	}
 
 	/**
@@ -213,6 +227,50 @@ public class BingoTeamIconsPlugin extends Plugin
 	}
 
 	/**
+	 * Adds, updates, or removes our badge before the player name inside a clan
+	 * broadcast message (collection log / drop announcements), where the name
+	 * is part of the message text rather than the sender field.
+	 */
+	private void tagBroadcastNode(MessageNode node)
+	{
+		String value = node.getValue();
+		if (value == null || value.isEmpty())
+		{
+			return;
+		}
+
+		String stripped = stripOwnTags(value);
+		String newValue = stripped;
+
+		if (config.broadcastIcons())
+		{
+			Matcher matcher = BROADCAST_PATTERN.matcher(Text.removeTags(stripped));
+			if (matcher.find())
+			{
+				String playerName = matcher.group(1);
+				Integer team = playerTeams.get(Text.standardize(playerName));
+				if (team != null)
+				{
+					int iconIndex = chatIconManager.chatIconIndex(iconIds[team - 1]);
+					if (iconIndex != -1)
+					{
+						String tag = "<img=" + iconIndex + ">";
+						int at = stripped.indexOf(playerName);
+						newValue = at >= 0
+							? stripped.substring(0, at) + tag + stripped.substring(at)
+							: tag + stripped;
+					}
+				}
+			}
+		}
+
+		if (!newValue.equals(value))
+		{
+			node.setValue(newValue);
+		}
+	}
+
+	/**
 	 * Removes any of this plugin's img tags from a name, leaving other tags
 	 * (e.g. friends chat rank icons) intact.
 	 */
@@ -251,26 +309,48 @@ public class BingoTeamIconsPlugin extends Plugin
 
 			for (MessageNode node : buffer.getLines())
 			{
-				if (node == null || !PLAYER_CHAT_TYPES.contains(node.getType()))
+				if (node == null)
 				{
 					continue;
 				}
 
-				if (removeAll)
+				if (PLAYER_CHAT_TYPES.contains(node.getType()))
 				{
-					String name = node.getName();
-					if (name != null && !name.isEmpty())
+					if (removeAll)
 					{
-						String stripped = stripOwnTags(name);
-						if (!stripped.equals(name))
+						String name = node.getName();
+						if (name != null && !name.isEmpty())
 						{
-							node.setName(stripped);
+							String stripped = stripOwnTags(name);
+							if (!stripped.equals(name))
+							{
+								node.setName(stripped);
+							}
 						}
 					}
+					else
+					{
+						tagMessageNode(node);
+					}
 				}
-				else
+				else if (BROADCAST_TYPES.contains(node.getType()))
 				{
-					tagMessageNode(node);
+					if (removeAll)
+					{
+						String value = node.getValue();
+						if (value != null && !value.isEmpty())
+						{
+							String stripped = stripOwnTags(value);
+							if (!stripped.equals(value))
+							{
+								node.setValue(stripped);
+							}
+						}
+					}
+					else
+					{
+						tagBroadcastNode(node);
+					}
 				}
 			}
 		}

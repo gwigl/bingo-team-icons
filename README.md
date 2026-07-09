@@ -11,6 +11,8 @@ A RuneLite plugin that shows a colored, numbered team badge next to player names
 
 Icons update immediately, including on messages already in your chat history. Names are matched case-insensitively, and lowering the team count keeps the hidden teams' rosters saved in case you raise it again.
 
+Team icons also appear on **collection log and drop broadcasts** in clan chat (own clan, guest clan, and group ironman broadcasts), next to the player's name inside the announcement. This can be turned off with the "Broadcast icons" toggle in the plugin's settings (gear icon).
+
 ## Development
 
 Requires JDK 11+ (any modern JDK works; the build targets Java 11).

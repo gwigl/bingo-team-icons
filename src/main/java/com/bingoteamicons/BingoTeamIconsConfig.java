@@ -24,4 +24,14 @@ public interface BingoTeamIconsConfig extends Config
 	{
 		return 2;
 	}
+
+	@ConfigItem(
+		keyName = "broadcastIcons",
+		name = "Broadcast icons",
+		description = "Also show team icons on collection log and drop broadcasts in clan chat"
+	)
+	default boolean broadcastIcons()
+	{
+		return true;
+	}
 }
