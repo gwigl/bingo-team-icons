@@ -1,0 +1,258 @@
+package com.bingoteamicons;
+
+import com.google.inject.Provides;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import javax.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.ChatLineBuffer;
+import net.runelite.api.ChatMessageType;
+import net.runelite.api.Client;
+import net.runelite.api.MessageNode;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.game.ChatIconManager;
+import net.runelite.client.plugins.Plugin;
+import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.util.Text;
+import net.runelite.api.events.ChatMessage;
+
+@Slf4j
+@PluginDescriptor(
+	name = "Bingo Team Icons",
+	description = "Shows a team badge next to player names in chat based on their bingo team",
+	tags = {"bingo", "team", "clan", "icon", "chat", "event"}
+)
+public class BingoTeamIconsPlugin extends Plugin
+{
+	static final int MAX_TEAMS = 10;
+
+	private static final Set<ChatMessageType> PLAYER_CHAT_TYPES = EnumSet.of(
+		ChatMessageType.PUBLICCHAT,
+		ChatMessageType.MODCHAT,
+		ChatMessageType.AUTOTYPER,
+		ChatMessageType.MODAUTOTYPER,
+		ChatMessageType.FRIENDSCHAT,
+		ChatMessageType.CLAN_CHAT,
+		ChatMessageType.CLAN_GUEST_CHAT,
+		ChatMessageType.CLAN_GIM_CHAT,
+		ChatMessageType.PRIVATECHAT,
+		ChatMessageType.PRIVATECHATOUT,
+		ChatMessageType.MODPRIVATECHAT
+	);
+
+	@Inject
+	private Client client;
+
+	@Inject
+	private ClientThread clientThread;
+
+	@Inject
+	private ClientToolbar clientToolbar;
+
+	@Inject
+	private ChatIconManager chatIconManager;
+
+	@Inject
+	private ConfigManager configManager;
+
+	@Inject
+	private BingoTeamIconsConfig config;
+
+	// iconIds[team - 1] = id returned by ChatIconManager; icons are registered once
+	// and kept for the lifetime of the client, since they cannot be unregistered
+	private static int[] iconIds;
+
+	private final Map<String, Integer> playerTeams = new HashMap<>();
+	private NavigationButton navButton;
+
+	@Provides
+	BingoTeamIconsConfig provideConfig(ConfigManager configManager)
+	{
+		return configManager.getConfig(BingoTeamIconsConfig.class);
+	}
+
+	@Override
+	protected void startUp()
+	{
+		if (iconIds == null)
+		{
+			iconIds = new int[MAX_TEAMS];
+			for (int i = 0; i < MAX_TEAMS; i++)
+			{
+				iconIds[i] = chatIconManager.registerChatIcon(TeamIconFactory.createBadge(i + 1));
+			}
+		}
+
+		rebuildPlayerTeams();
+
+		BingoTeamIconsPanel panel = new BingoTeamIconsPanel(configManager, config);
+		navButton = NavigationButton.builder()
+			.tooltip("Bingo Team Icons")
+			.icon(TeamIconFactory.createPanelIcon())
+			.priority(7)
+			.panel(panel)
+			.build();
+		clientToolbar.addNavigation(navButton);
+
+		clientThread.invokeLater(this::retagChatHistory);
+	}
+
+	@Override
+	protected void shutDown()
+	{
+		clientToolbar.removeNavigation(navButton);
+		navButton = null;
+		playerTeams.clear();
+		clientThread.invokeLater(this::retagChatHistory);
+	}
+
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		if (!BingoTeamIconsConfig.GROUP.equals(event.getGroup()))
+		{
+			return;
+		}
+
+		rebuildPlayerTeams();
+		clientThread.invokeLater(this::retagChatHistory);
+	}
+
+	@Subscribe
+	public void onChatMessage(ChatMessage event)
+	{
+		if (!PLAYER_CHAT_TYPES.contains(event.getType()))
+		{
+			return;
+		}
+
+		tagMessageNode(event.getMessageNode());
+	}
+
+	/**
+	 * Adds, updates, or removes our badge on a message node's sender name to
+	 * match the current roster. Safe to call repeatedly on the same node.
+	 */
+	private void tagMessageNode(MessageNode node)
+	{
+		String name = node.getName();
+		if (name == null || name.isEmpty())
+		{
+			return;
+		}
+
+		String strippedName = stripOwnTags(name);
+		Integer team = playerTeams.get(Text.standardize(strippedName));
+		String tag = "";
+		if (team != null)
+		{
+			int iconIndex = chatIconManager.chatIconIndex(iconIds[team - 1]);
+			if (iconIndex != -1)
+			{
+				tag = "<img=" + iconIndex + ">";
+			}
+		}
+
+		String newName = tag + strippedName;
+		if (!newName.equals(name))
+		{
+			node.setName(newName);
+		}
+	}
+
+	/**
+	 * Removes any of this plugin's img tags from a name, leaving other tags
+	 * (e.g. friends chat rank icons) intact.
+	 */
+	private String stripOwnTags(String name)
+	{
+		for (int id : iconIds)
+		{
+			int iconIndex = chatIconManager.chatIconIndex(id);
+			if (iconIndex != -1)
+			{
+				name = name.replace("<img=" + iconIndex + ">", "");
+			}
+		}
+		return name;
+	}
+
+	/**
+	 * Re-applies tagging to all buffered chat lines so roster changes update
+	 * messages already on screen. Must run on the client thread.
+	 */
+	private void retagChatHistory()
+	{
+		Map<Integer, ChatLineBuffer> chatLineMap = client.getChatLineMap();
+		if (chatLineMap == null)
+		{
+			return;
+		}
+
+		boolean removeAll = navButton == null; // shutting down
+		for (ChatLineBuffer buffer : chatLineMap.values())
+		{
+			if (buffer == null)
+			{
+				continue;
+			}
+
+			for (MessageNode node : buffer.getLines())
+			{
+				if (node == null || !PLAYER_CHAT_TYPES.contains(node.getType()))
+				{
+					continue;
+				}
+
+				if (removeAll)
+				{
+					String name = node.getName();
+					if (name != null && !name.isEmpty())
+					{
+						String stripped = stripOwnTags(name);
+						if (!stripped.equals(name))
+						{
+							node.setName(stripped);
+						}
+					}
+				}
+				else
+				{
+					tagMessageNode(node);
+				}
+			}
+		}
+
+		client.refreshChat();
+	}
+
+	private void rebuildPlayerTeams()
+	{
+		playerTeams.clear();
+		int teamCount = Math.min(Math.max(config.teamCount(), 1), MAX_TEAMS);
+		for (int team = 1; team <= teamCount; team++)
+		{
+			String names = configManager.getConfiguration(BingoTeamIconsConfig.GROUP, BingoTeamIconsPanel.teamNamesKey(team));
+			if (names == null || names.isEmpty())
+			{
+				continue;
+			}
+
+			for (String name : names.split("[,\n]"))
+			{
+				String standardized = Text.standardize(name);
+				if (!standardized.isEmpty())
+				{
+					playerTeams.putIfAbsent(standardized, team);
+				}
+			}
+		}
+	}
+}
