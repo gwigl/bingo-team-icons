@@ -13,13 +13,13 @@ Icons update immediately, including on messages already in your chat history. Na
 
 Team icons also appear on **collection log and drop broadcasts** in clan chat (own clan, guest clan, and group ironman broadcasts), next to the player's name inside the announcement. This can be turned off with the "Broadcast icons" toggle in the plugin's settings (gear icon).
 
-To preview how icons will look, type `::bingotest` in chat (optionally `::bingotest Some Player`) — it locally injects a sample chat message and sample drop/collection log broadcasts for a rostered player. Nothing is sent to the server.
 
 ## Development
 
 Requires JDK 11+ (any modern JDK works; the build targets Java 11).
 
 - **Run a dev client:** `gradlew run` (or run `BingoTeamIconsPluginTest` from IntelliJ). To log in with a Jagex account, follow the [Using Jagex Accounts](https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts) wiki page.
+- **Preview icons:** dev/standalone clients include a test-only plugin adding the `::bingotest` chat command (optionally `::bingotest Some Player`), which locally injects a sample chat message and drop/collection log broadcasts. It lives in `src/test` and is not part of the hub build.
 - **Build:** `gradlew build` — the plugin jar lands in `build/libs/`.
 
 ### Playing with the plugin (outside IntelliJ)
