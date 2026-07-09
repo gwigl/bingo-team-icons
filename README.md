@@ -13,6 +13,8 @@ Icons update immediately, including on messages already in your chat history. Na
 
 Team icons also appear on **collection log and drop broadcasts** in clan chat (own clan, guest clan, and group ironman broadcasts), next to the player's name inside the announcement. This can be turned off with the "Broadcast icons" toggle in the plugin's settings (gear icon).
 
+To preview how icons will look, type `::bingotest` in chat (optionally `::bingotest Some Player`) — it locally injects a sample chat message and sample drop/collection log broadcasts for a rostered player. Nothing is sent to the server.
+
 ## Development
 
 Requires JDK 11+ (any modern JDK works; the build targets Java 11).
