@@ -1,6 +1,7 @@
 package com.bingoteamicons;
 
 import com.google.inject.Provides;
+import java.awt.Color;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -11,6 +12,7 @@ import net.runelite.api.ChatLineBuffer;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.MessageNode;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -20,8 +22,8 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.ui.components.colorpicker.ColorPickerManager;
 import net.runelite.client.util.Text;
-import net.runelite.api.events.ChatMessage;
 
 @Slf4j
 @PluginDescriptor(
@@ -63,10 +65,14 @@ public class BingoTeamIconsPlugin extends Plugin
 	private ConfigManager configManager;
 
 	@Inject
+	private ColorPickerManager colorPickerManager;
+
+	@Inject
 	private BingoTeamIconsConfig config;
 
 	// iconIds[team - 1] = id returned by ChatIconManager; icons are registered once
-	// and kept for the lifetime of the client, since they cannot be unregistered
+	// and kept for the lifetime of the client, since they cannot be unregistered.
+	// Color changes swap the icon image in place via updateChatIcon.
 	private static int[] iconIds;
 
 	private final Map<String, Integer> playerTeams = new HashMap<>();
@@ -86,13 +92,18 @@ public class BingoTeamIconsPlugin extends Plugin
 			iconIds = new int[MAX_TEAMS];
 			for (int i = 0; i < MAX_TEAMS; i++)
 			{
-				iconIds[i] = chatIconManager.registerChatIcon(TeamIconFactory.createBadge(i + 1));
+				iconIds[i] = chatIconManager.registerChatIcon(TeamIconFactory.createBadge(teamColor(i + 1)));
 			}
+		}
+		else
+		{
+			// colors may have changed while the plugin was off
+			clientThread.invokeLater(this::updateIconImages);
 		}
 
 		rebuildPlayerTeams();
 
-		BingoTeamIconsPanel panel = new BingoTeamIconsPanel(configManager, config);
+		BingoTeamIconsPanel panel = new BingoTeamIconsPanel(this, configManager, colorPickerManager);
 		navButton = NavigationButton.builder()
 			.tooltip("Bingo Team Icons")
 			.icon(TeamIconFactory.createPanelIcon())
@@ -121,6 +132,12 @@ public class BingoTeamIconsPlugin extends Plugin
 			return;
 		}
 
+		if (event.getKey().endsWith("Color"))
+		{
+			clientThread.invokeLater(this::updateIconImages);
+			return;
+		}
+
 		rebuildPlayerTeams();
 		clientThread.invokeLater(this::retagChatHistory);
 	}
@@ -134,6 +151,34 @@ public class BingoTeamIconsPlugin extends Plugin
 		}
 
 		tagMessageNode(event.getMessageNode());
+	}
+
+	/**
+	 * The configured color for a team, falling back to the default palette.
+	 */
+	Color teamColor(int team)
+	{
+		String stored = configManager.getConfiguration(BingoTeamIconsConfig.GROUP, BingoTeamIconsPanel.teamColorKey(team));
+		if (stored != null && !stored.isEmpty())
+		{
+			try
+			{
+				return Color.decode(stored);
+			}
+			catch (NumberFormatException ex)
+			{
+				log.debug("invalid stored color for team {}: {}", team, stored);
+			}
+		}
+		return TeamIconFactory.defaultTeamColor(team);
+	}
+
+	private void updateIconImages()
+	{
+		for (int team = 1; team <= MAX_TEAMS; team++)
+		{
+			chatIconManager.updateChatIcon(iconIds[team - 1], TeamIconFactory.createBadge(teamColor(team)));
+		}
 	}
 
 	/**
