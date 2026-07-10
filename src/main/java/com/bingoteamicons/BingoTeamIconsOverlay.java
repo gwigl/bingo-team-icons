@@ -51,8 +51,14 @@ class BingoTeamIconsOverlay extends Overlay
 		}
 
 		FontMetrics fm = graphics.getFontMetrics();
+		Player localPlayer = client.getLocalPlayer();
 		for (Player player : wv.players())
 		{
+			if (player == localPlayer)
+			{
+				continue;
+			}
+
 			String name = player.getName();
 			if (name == null || !wv.contains(player.getLocalLocation()))
 			{
@@ -78,7 +84,7 @@ class BingoTeamIconsOverlay extends Overlay
 			}
 
 			Point imageLocation = new Point(
-				textLocation.getX() - badge.getWidth() - 2,
+				textLocation.getX() + fm.stringWidth(name) + 2,
 				textLocation.getY() - fm.getHeight() / 2 - badge.getHeight() / 2);
 			OverlayUtil.renderImageLocation(graphics, imageLocation, badge);
 		}
