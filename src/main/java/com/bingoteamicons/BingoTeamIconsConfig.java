@@ -26,6 +26,16 @@ public interface BingoTeamIconsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "nameplateIcons",
+		name = "Overhead icons",
+		description = "Show team icons above players' heads, next to the overhead name position"
+	)
+	default boolean nameplateIcons()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "broadcastIcons",
 		name = "Broadcast icons",
 		description = "Also show team icons on collection log and drop broadcasts in clan chat"

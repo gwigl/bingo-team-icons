@@ -2,6 +2,7 @@ package com.bingoteamicons;
 
 import com.google.inject.Provides;
 import java.awt.Color;
+import java.awt.image.BufferedImage;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,6 +25,7 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.components.colorpicker.ColorPickerManager;
 import net.runelite.client.util.Text;
 
@@ -80,6 +82,12 @@ public class BingoTeamIconsPlugin extends Plugin
 	private ColorPickerManager colorPickerManager;
 
 	@Inject
+	private OverlayManager overlayManager;
+
+	@Inject
+	private BingoTeamIconsOverlay overlay;
+
+	@Inject
 	private BingoTeamIconsConfig config;
 
 	// iconIds[team - 1] = id returned by ChatIconManager; icons are registered once
@@ -88,6 +96,7 @@ public class BingoTeamIconsPlugin extends Plugin
 	private static int[] iconIds;
 
 	private final Map<String, Integer> playerTeams = new HashMap<>();
+	private final BufferedImage[] badgeImages = new BufferedImage[MAX_TEAMS];
 	private NavigationButton navButton;
 
 	@Provides
@@ -104,7 +113,9 @@ public class BingoTeamIconsPlugin extends Plugin
 			iconIds = new int[MAX_TEAMS];
 			for (int i = 0; i < MAX_TEAMS; i++)
 			{
-				iconIds[i] = chatIconManager.registerChatIcon(TeamIconFactory.createBadge(teamColor(i + 1)));
+				BufferedImage badge = TeamIconFactory.createBadge(teamColor(i + 1));
+				badgeImages[i] = badge;
+				iconIds[i] = chatIconManager.registerChatIcon(badge);
 			}
 		}
 		else
@@ -114,6 +125,7 @@ public class BingoTeamIconsPlugin extends Plugin
 		}
 
 		rebuildPlayerTeams();
+		overlayManager.add(overlay);
 
 		BingoTeamIconsPanel panel = new BingoTeamIconsPanel(this, configManager, colorPickerManager);
 		navButton = NavigationButton.builder()
@@ -130,6 +142,7 @@ public class BingoTeamIconsPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		overlayManager.remove(overlay);
 		clientToolbar.removeNavigation(navButton);
 		navButton = null;
 		playerTeams.clear();
@@ -191,8 +204,28 @@ public class BingoTeamIconsPlugin extends Plugin
 	{
 		for (int team = 1; team <= MAX_TEAMS; team++)
 		{
-			chatIconManager.updateChatIcon(iconIds[team - 1], TeamIconFactory.createBadge(teamColor(team)));
+			BufferedImage badge = TeamIconFactory.createBadge(teamColor(team));
+			badgeImages[team - 1] = badge;
+			chatIconManager.updateChatIcon(iconIds[team - 1], badge);
 		}
+	}
+
+	boolean hasRoster()
+	{
+		return !playerTeams.isEmpty();
+	}
+
+	/**
+	 * The team for an already-standardized player name, or null.
+	 */
+	Integer teamFor(String standardizedName)
+	{
+		return playerTeams.get(standardizedName);
+	}
+
+	BufferedImage badgeImage(int team)
+	{
+		return team >= 1 && team <= MAX_TEAMS ? badgeImages[team - 1] : null;
 	}
 
 	/**

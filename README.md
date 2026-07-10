@@ -12,4 +12,4 @@ A RuneLite plugin that shows a colored team badge next to player names in chat, 
 
 Icons update immediately, including on messages already in your chat history. Names are matched case-insensitively, and lowering the team count keeps the hidden teams' rosters saved in case you raise it again.
 
-Team icons also appear on **collection log and drop broadcasts** in clan chat (own clan, guest clan, and group ironman broadcasts), next to the player's name inside the announcement. This can be turned off with the "Broadcast icons" toggle in the plugin's settings (gear icon).
+Team icons also appear on **collection log and drop broadcasts** in clan chat (own clan, guest clan, and group ironman broadcasts), next to the player's name inside the announcement, and **above players' heads** at the overhead name position (pairs well with Player Indicators overhead names). Both can be turned off individually with the "Broadcast icons" and "Overhead icons" toggles in the plugin's settings (gear icon).
