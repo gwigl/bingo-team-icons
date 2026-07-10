@@ -26,7 +26,7 @@ final class TeamIconFactory
 	};
 
 	// matches ChatIconManager.IMAGE_DIMENSION used for rank icons
-	private static final int BADGE_SIZE = 11;
+	static final int BADGE_SIZE = 11;
 	private static final Color OUTLINE_COLOR = new Color(33, 33, 33);
 
 	private TeamIconFactory()

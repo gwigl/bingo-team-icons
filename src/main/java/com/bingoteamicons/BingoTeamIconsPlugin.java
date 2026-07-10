@@ -14,8 +14,12 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatLineBuffer;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.api.MessageNode;
+import net.runelite.api.ScriptID;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.ScriptCallbackEvent;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -99,6 +103,10 @@ public class BingoTeamIconsPlugin extends Plugin
 	private final BufferedImage[] badgeImages = new BufferedImage[MAX_TEAMS];
 	private NavigationButton navButton;
 
+	// team of the friends list row currently being laid out, between the
+	// friendsChatSetText and friendsChatSetPosition script callbacks
+	private Integer currentlyLayoutingTeam;
+
 	@Provides
 	BingoTeamIconsConfig provideConfig(ConfigManager configManager)
 	{
@@ -126,6 +134,7 @@ public class BingoTeamIconsPlugin extends Plugin
 
 		rebuildPlayerTeams();
 		overlayManager.add(overlay);
+		rebuildFriendsList();
 
 		BingoTeamIconsPanel panel = new BingoTeamIconsPanel(this, configManager, colorPickerManager);
 		navButton = NavigationButton.builder()
@@ -147,6 +156,7 @@ public class BingoTeamIconsPlugin extends Plugin
 		navButton = null;
 		playerTeams.clear();
 		clientThread.invokeLater(this::retagChatHistory);
+		rebuildFriendsList();
 	}
 
 	@Subscribe
@@ -165,6 +175,54 @@ public class BingoTeamIconsPlugin extends Plugin
 
 		rebuildPlayerTeams();
 		clientThread.invokeLater(this::retagChatHistory);
+		rebuildFriendsList();
+	}
+
+	/**
+	 * Appends the team badge to names while the client lays out friends list
+	 * rows, using the same script callbacks as the core Friend Notes plugin.
+	 */
+	@Subscribe
+	public void onScriptCallbackEvent(ScriptCallbackEvent event)
+	{
+		if (!config.friendsListIcons())
+		{
+			return;
+		}
+
+		switch (event.getEventName())
+		{
+			case "friendsChatSetText":
+			{
+				Object[] objectStack = client.getObjectStack();
+				int objectStackSize = client.getObjectStackSize();
+				String rsn = (String) objectStack[objectStackSize - 1];
+				Integer team = playerTeams.get(Text.standardize(rsn));
+				currentlyLayoutingTeam = null;
+				if (team != null)
+				{
+					int iconIndex = chatIconManager.chatIconIndex(iconIds[team - 1]);
+					if (iconIndex != -1)
+					{
+						currentlyLayoutingTeam = team;
+						objectStack[objectStackSize - 1] = rsn + " <img=" + iconIndex + ">";
+					}
+				}
+				break;
+			}
+			case "friendsChatSetPosition":
+			{
+				if (currentlyLayoutingTeam == null)
+				{
+					return;
+				}
+
+				int[] intStack = client.getIntStack();
+				int intStackSize = client.getIntStackSize();
+				intStack[intStackSize - 4] += TeamIconFactory.BADGE_SIZE + 1;
+				break;
+			}
+		}
 	}
 
 	@Subscribe
@@ -208,6 +266,34 @@ public class BingoTeamIconsPlugin extends Plugin
 			badgeImages[team - 1] = badge;
 			chatIconManager.updateChatIcon(iconIds[team - 1], badge);
 		}
+	}
+
+	/**
+	 * Re-runs the friends list build script so name tags reflect the current
+	 * roster (mirrors the core Friend Notes plugin).
+	 */
+	private void rebuildFriendsList()
+	{
+		clientThread.invokeLater(() ->
+		{
+			if (client.getGameState() != GameState.LOGGED_IN)
+			{
+				return;
+			}
+
+			client.runScript(
+				ScriptID.FRIENDS_UPDATE,
+				InterfaceID.Friends.LIST_CONTAINER,
+				InterfaceID.Friends.SORT_NAME,
+				InterfaceID.Friends.SORT_RECENT,
+				InterfaceID.Friends.SORT_WORLD,
+				InterfaceID.Friends.SORT_LEGACY,
+				InterfaceID.Friends.LIST,
+				InterfaceID.Friends.SCROLLBAR,
+				InterfaceID.Friends.LOADING,
+				InterfaceID.Friends.TOOLTIP
+			);
+		});
 	}
 
 	boolean hasRoster()
