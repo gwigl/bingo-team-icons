@@ -84,8 +84,8 @@ class BingoTeamIconsOverlay extends Overlay
 			}
 
 			Point imageLocation = new Point(
-				textLocation.getX() - badge.getWidth() - 2,
-				textLocation.getY() - fm.getHeight() / 2 - badge.getHeight() / 2);
+				textLocation.getX() - badge.getWidth() - 5,
+				textLocation.getY() - fm.getHeight() / 2 - badge.getHeight() / 2 + 2);
 			OverlayUtil.renderImageLocation(graphics, imageLocation, badge);
 		}
 
