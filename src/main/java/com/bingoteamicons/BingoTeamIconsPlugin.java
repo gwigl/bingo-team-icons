@@ -66,8 +66,9 @@ public class BingoTeamIconsPlugin extends Plugin
 	);
 
 	// "Player received a drop: ..." / "Player received a new collection log item: ..."
+	// / "Player received special loot from a raid: ..."
 	private static final Pattern BROADCAST_PATTERN = Pattern.compile(
-		"^(.+?) received (?:a drop|a new collection log item):");
+		"^(.+?) received (?:a drop|a new collection log item|special loot from a raid):");
 
 	@Inject
 	private Client client;
