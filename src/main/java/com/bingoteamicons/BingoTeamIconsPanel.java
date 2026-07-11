@@ -136,7 +136,7 @@ class BingoTeamIconsPanel extends PluginPanel
 
 		JPanel header = new JPanel(new BorderLayout(6, 0));
 		header.setOpaque(false);
-		JLabel label = new JLabel("Team " + team);
+		JLabel label = new JLabel();
 		label.setFont(FontManager.getRunescapeBoldFont());
 		header.add(label, BorderLayout.CENTER);
 		header.add(createColorButton(team), BorderLayout.EAST);
@@ -159,6 +159,10 @@ class BingoTeamIconsPanel extends PluginPanel
 			namesArea.setText(saved);
 		}
 
+		Runnable updateLabel = () ->
+			label.setText("Team " + team + " (" + countNames(namesArea.getText()) + ")");
+		updateLabel.run();
+
 		// debounce saves: every config write retags chat and redraws the friends
 		// and clan lists, which is too heavy to run per keystroke
 		Timer saveTimer = new Timer(500, e ->
@@ -170,24 +174,48 @@ class BingoTeamIconsPanel extends PluginPanel
 			@Override
 			public void insertUpdate(DocumentEvent e)
 			{
-				saveTimer.restart();
+				changed();
 			}
 
 			@Override
 			public void removeUpdate(DocumentEvent e)
 			{
-				saveTimer.restart();
+				changed();
 			}
 
 			@Override
 			public void changedUpdate(DocumentEvent e)
 			{
+				changed();
+			}
+
+			private void changed()
+			{
+				updateLabel.run();
 				saveTimer.restart();
 			}
 		});
 
 		section.add(namesArea, BorderLayout.CENTER);
 		return section;
+	}
+
+	private static int countNames(String text)
+	{
+		if (text == null || text.isEmpty())
+		{
+			return 0;
+		}
+
+		int count = 0;
+		for (String name : text.split("[,\n]"))
+		{
+			if (!name.trim().isEmpty())
+			{
+				count++;
+			}
+		}
+		return count;
 	}
 
 	private JButton createColorButton(int team)
