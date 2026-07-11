@@ -5,19 +5,32 @@ import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
+import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatLineBuffer;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.FriendsChatManager;
+import net.runelite.api.FriendsChatMember;
 import net.runelite.api.GameState;
 import net.runelite.api.MessageNode;
 import net.runelite.api.ScriptID;
+import net.runelite.api.clan.ClanChannel;
+import net.runelite.api.clan.ClanChannelMember;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.ClanChannelChanged;
+import net.runelite.api.events.ClanMemberJoined;
+import net.runelite.api.events.ClanMemberLeft;
+import net.runelite.api.events.FriendsChatChanged;
+import net.runelite.api.events.FriendsChatMemberJoined;
+import net.runelite.api.events.FriendsChatMemberLeft;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.gameval.InterfaceID;
@@ -108,6 +121,7 @@ public class BingoTeamIconsPlugin extends Plugin
 	private final Map<String, Integer> playerTeams = new HashMap<>();
 	private final BufferedImage[] badgeImages = new BufferedImage[MAX_TEAMS];
 	private NavigationButton navButton;
+	private BingoTeamIconsPanel panel;
 
 	// team of the friends list row currently being laid out, between the
 	// friendsChatSetText and friendsChatSetPosition script callbacks
@@ -143,7 +157,7 @@ public class BingoTeamIconsPlugin extends Plugin
 		rebuildFriendsList();
 		rebuildClanLists();
 
-		BingoTeamIconsPanel panel = new BingoTeamIconsPanel(this, configManager, colorPickerManager);
+		panel = new BingoTeamIconsPanel(this, configManager, colorPickerManager);
 		navButton = NavigationButton.builder()
 			.tooltip("Bingo Team Icons")
 			.icon(TeamIconFactory.createPanelIcon())
@@ -161,6 +175,7 @@ public class BingoTeamIconsPlugin extends Plugin
 		overlayManager.remove(overlay);
 		clientToolbar.removeNavigation(navButton);
 		navButton = null;
+		panel = null;
 		playerTeams.clear();
 		clientThread.invokeLater(this::retagChatHistory);
 		rebuildFriendsList();
@@ -185,6 +200,103 @@ public class BingoTeamIconsPlugin extends Plugin
 		clientThread.invokeLater(this::retagChatHistory);
 		rebuildFriendsList();
 		rebuildClanLists();
+		refreshPanelOnlineCounts();
+	}
+
+	@Subscribe
+	public void onClanChannelChanged(ClanChannelChanged event)
+	{
+		refreshPanelOnlineCounts();
+	}
+
+	@Subscribe
+	public void onClanMemberJoined(ClanMemberJoined event)
+	{
+		refreshPanelOnlineCounts();
+	}
+
+	@Subscribe
+	public void onClanMemberLeft(ClanMemberLeft event)
+	{
+		refreshPanelOnlineCounts();
+	}
+
+	@Subscribe
+	public void onFriendsChatChanged(FriendsChatChanged event)
+	{
+		refreshPanelOnlineCounts();
+	}
+
+	@Subscribe
+	public void onFriendsChatMemberJoined(FriendsChatMemberJoined event)
+	{
+		refreshPanelOnlineCounts();
+	}
+
+	@Subscribe
+	public void onFriendsChatMemberLeft(FriendsChatMemberLeft event)
+	{
+		refreshPanelOnlineCounts();
+	}
+
+	private void refreshPanelOnlineCounts()
+	{
+		BingoTeamIconsPanel p = panel;
+		if (p != null)
+		{
+			p.refreshOnlineCounts();
+		}
+	}
+
+	/**
+	 * Counts rostered players per team who are currently online in the clan
+	 * channel, guest clan channel, or friends chat channel. Reads client state
+	 * on the client thread and delivers the result on the Swing EDT.
+	 */
+	void computeOnlineCounts(Consumer<Map<Integer, Integer>> consumer)
+	{
+		clientThread.invokeLater(() ->
+		{
+			Set<String> onlineNames = new HashSet<>();
+
+			ClanChannel clan = client.getClanChannel();
+			if (clan != null)
+			{
+				for (ClanChannelMember member : clan.getMembers())
+				{
+					onlineNames.add(Text.standardize(member.getName()));
+				}
+			}
+
+			ClanChannel guest = client.getGuestClanChannel();
+			if (guest != null)
+			{
+				for (ClanChannelMember member : guest.getMembers())
+				{
+					onlineNames.add(Text.standardize(member.getName()));
+				}
+			}
+
+			FriendsChatManager friendsChat = client.getFriendsChatManager();
+			if (friendsChat != null)
+			{
+				for (FriendsChatMember member : friendsChat.getMembers())
+				{
+					onlineNames.add(Text.standardize(member.getName()));
+				}
+			}
+
+			Map<Integer, Integer> onlineByTeam = new HashMap<>();
+			for (Map.Entry<String, Integer> entry : playerTeams.entrySet())
+			{
+				if (onlineNames.contains(entry.getKey()))
+				{
+					onlineByTeam.merge(entry.getValue(), 1, Integer::sum);
+				}
+			}
+
+			SwingUtilities.invokeLater(() -> consumer.accept(onlineByTeam));
+		});
 	}
 
 	/**

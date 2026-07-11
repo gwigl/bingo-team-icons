@@ -3,6 +3,8 @@ package com.bingoteamicons;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.util.HashMap;
+import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -34,12 +36,25 @@ class BingoTeamIconsPanel extends PluginPanel
 	private final ConfigManager configManager;
 	private final ColorPickerManager colorPickerManager;
 	private final JPanel teamsContainer = new JPanel();
+	private final Map<Integer, JLabel> teamLabels = new HashMap<>();
+	private final Map<Integer, JTextArea> teamAreas = new HashMap<>();
+	private final Timer onlineRefreshTimer;
+	private Map<Integer, Integer> onlineCounts = new HashMap<>();
 
 	BingoTeamIconsPanel(BingoTeamIconsPlugin plugin, ConfigManager configManager, ColorPickerManager colorPickerManager)
 	{
 		this.plugin = plugin;
 		this.configManager = configManager;
 		this.colorPickerManager = colorPickerManager;
+
+		// coalesce bursts of member join/leave events into one recount
+		onlineRefreshTimer = new Timer(300, e ->
+			plugin.computeOnlineCounts(counts ->
+			{
+				onlineCounts = counts;
+				teamLabels.keySet().forEach(this::updateTeamLabel);
+			}));
+		onlineRefreshTimer.setRepeats(false);
 
 		setBorder(new EmptyBorder(10, 10, 10, 10));
 		setLayout(new BorderLayout());
@@ -119,6 +134,8 @@ class BingoTeamIconsPanel extends PluginPanel
 	private void rebuildTeamSections(int teamCount)
 	{
 		teamsContainer.removeAll();
+		teamLabels.clear();
+		teamAreas.clear();
 		for (int team = 1; team <= teamCount; team++)
 		{
 			teamsContainer.add(createTeamSection(team));
@@ -126,6 +143,32 @@ class BingoTeamIconsPanel extends PluginPanel
 		}
 		teamsContainer.revalidate();
 		teamsContainer.repaint();
+		refreshOnlineCounts();
+	}
+
+	@Override
+	public void onActivate()
+	{
+		refreshOnlineCounts();
+	}
+
+	void refreshOnlineCounts()
+	{
+		onlineRefreshTimer.restart();
+	}
+
+	private void updateTeamLabel(int team)
+	{
+		JLabel label = teamLabels.get(team);
+		JTextArea namesArea = teamAreas.get(team);
+		if (label == null || namesArea == null)
+		{
+			return;
+		}
+
+		int total = countNames(namesArea.getText());
+		int online = Math.min(onlineCounts.getOrDefault(team, 0), total);
+		label.setText("Team " + team + " — " + online + "/" + total + " online");
 	}
 
 	private JPanel createTeamSection(int team)
@@ -159,9 +202,9 @@ class BingoTeamIconsPanel extends PluginPanel
 			namesArea.setText(saved);
 		}
 
-		Runnable updateLabel = () ->
-			label.setText("Team " + team + " (" + countNames(namesArea.getText()) + ")");
-		updateLabel.run();
+		teamLabels.put(team, label);
+		teamAreas.put(team, namesArea);
+		updateTeamLabel(team);
 
 		// debounce saves: every config write retags chat and redraws the friends
 		// and clan lists, which is too heavy to run per keystroke
@@ -191,7 +234,7 @@ class BingoTeamIconsPanel extends PluginPanel
 
 			private void changed()
 			{
-				updateLabel.run();
+				updateTeamLabel(team);
 				saveTimer.restart();
 			}
 		});
