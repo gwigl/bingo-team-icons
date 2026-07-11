@@ -46,6 +46,16 @@ public interface BingoTeamIconsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "clanListIcons",
+		name = "Clan member list icons",
+		description = "Show team icons next to names in the clan and guest clan member lists"
+	)
+	default boolean clanListIcons()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "broadcastIcons",
 		name = "Broadcast icons",
 		description = "Also show team icons on collection log and drop broadcasts in clan chat"

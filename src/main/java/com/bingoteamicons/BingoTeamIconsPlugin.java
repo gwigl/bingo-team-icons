@@ -19,7 +19,9 @@ import net.runelite.api.MessageNode;
 import net.runelite.api.ScriptID;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.ScriptCallbackEvent;
+import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -135,6 +137,7 @@ public class BingoTeamIconsPlugin extends Plugin
 		rebuildPlayerTeams();
 		overlayManager.add(overlay);
 		rebuildFriendsList();
+		rebuildClanLists();
 
 		BingoTeamIconsPanel panel = new BingoTeamIconsPanel(this, configManager, colorPickerManager);
 		navButton = NavigationButton.builder()
@@ -157,6 +160,7 @@ public class BingoTeamIconsPlugin extends Plugin
 		playerTeams.clear();
 		clientThread.invokeLater(this::retagChatHistory);
 		rebuildFriendsList();
+		rebuildClanLists();
 	}
 
 	@Subscribe
@@ -176,6 +180,7 @@ public class BingoTeamIconsPlugin extends Plugin
 		rebuildPlayerTeams();
 		clientThread.invokeLater(this::retagChatHistory);
 		rebuildFriendsList();
+		rebuildClanLists();
 	}
 
 	/**
@@ -221,6 +226,58 @@ public class BingoTeamIconsPlugin extends Plugin
 				int intStackSize = client.getIntStackSize();
 				intStack[intStackSize - 4] += TeamIconFactory.BADGE_SIZE + 1;
 				break;
+			}
+		}
+	}
+
+	/**
+	 * Appends the team badge to names in the clan and guest clan member lists
+	 * after the client rebuilds them.
+	 */
+	@Subscribe
+	public void onScriptPostFired(ScriptPostFired event)
+	{
+		if (event.getScriptId() != ScriptID.CLAN_SIDEPANEL_DRAW || !config.clanListIcons())
+		{
+			return;
+		}
+
+		tagMemberList(InterfaceID.ClansSidepanel.PLAYERLIST);
+		tagMemberList(InterfaceID.ClansGuestSidepanel.PLAYERLIST);
+	}
+
+	private void tagMemberList(int componentId)
+	{
+		Widget list = client.getWidget(componentId);
+		if (list == null || list.getChildren() == null)
+		{
+			return;
+		}
+
+		for (Widget child : list.getChildren())
+		{
+			if (child == null)
+			{
+				continue;
+			}
+
+			String text = child.getText();
+			if (text == null || text.isEmpty())
+			{
+				continue;
+			}
+
+			// non-name children (e.g. world numbers) simply won't match the roster
+			Integer team = playerTeams.get(Text.standardize(text));
+			if (team == null)
+			{
+				continue;
+			}
+
+			int iconIndex = chatIconManager.chatIconIndex(iconIds[team - 1]);
+			if (iconIndex != -1)
+			{
+				child.setText(text + " <img=" + iconIndex + ">");
 			}
 		}
 	}
@@ -293,6 +350,33 @@ public class BingoTeamIconsPlugin extends Plugin
 				InterfaceID.Friends.LOADING,
 				InterfaceID.Friends.TOOLTIP
 			);
+		});
+	}
+
+	/**
+	 * Re-runs the clan sidepanel draw scripts so member list tags reflect the
+	 * current roster (same redraw trick as the core Chat Channel plugin).
+	 */
+	private void rebuildClanLists()
+	{
+		clientThread.invokeLater(() ->
+		{
+			if (client.getGameState() != GameState.LOGGED_IN)
+			{
+				return;
+			}
+
+			Widget w = client.getWidget(InterfaceID.ClansSidepanel.UNIVERSE);
+			if (w != null)
+			{
+				client.runScript(w.getOnVarTransmitListener());
+			}
+
+			w = client.getWidget(InterfaceID.ClansGuestSidepanel.UNIVERSE);
+			if (w != null)
+			{
+				client.runScript(w.getOnVarTransmitListener());
+			}
 		});
 	}
 
