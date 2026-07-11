@@ -13,6 +13,7 @@ import javax.swing.JSpinner;
 import javax.swing.JTextArea;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -158,29 +159,30 @@ class BingoTeamIconsPanel extends PluginPanel
 			namesArea.setText(saved);
 		}
 
+		// debounce saves: every config write retags chat and redraws the friends
+		// and clan lists, which is too heavy to run per keystroke
+		Timer saveTimer = new Timer(500, e ->
+			configManager.setConfiguration(BingoTeamIconsConfig.GROUP, teamNamesKey(team), namesArea.getText()));
+		saveTimer.setRepeats(false);
+
 		namesArea.getDocument().addDocumentListener(new DocumentListener()
 		{
 			@Override
 			public void insertUpdate(DocumentEvent e)
 			{
-				save();
+				saveTimer.restart();
 			}
 
 			@Override
 			public void removeUpdate(DocumentEvent e)
 			{
-				save();
+				saveTimer.restart();
 			}
 
 			@Override
 			public void changedUpdate(DocumentEvent e)
 			{
-				save();
-			}
-
-			private void save()
-			{
-				configManager.setConfiguration(BingoTeamIconsConfig.GROUP, teamNamesKey(team), namesArea.getText());
+				saveTimer.restart();
 			}
 		});
 

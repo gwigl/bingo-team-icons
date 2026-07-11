@@ -267,19 +267,44 @@ public class BingoTeamIconsPlugin extends Plugin
 				continue;
 			}
 
+			// strip any tag we added on a previous pass: CLAN_SIDEPANEL_DRAW fires
+			// per panel but we tag both, so the non-rebuilt panel keeps our tag
+			String stripped = stripOwnListTags(text);
+
 			// non-name children (e.g. world numbers) simply won't match the roster
-			Integer team = playerTeams.get(Text.standardize(text));
-			if (team == null)
+			String newText = stripped;
+			Integer team = playerTeams.get(Text.standardize(stripped));
+			if (team != null)
 			{
-				continue;
+				int iconIndex = chatIconManager.chatIconIndex(iconIds[team - 1]);
+				if (iconIndex != -1)
+				{
+					newText = stripped + " <img=" + iconIndex + ">";
+				}
 			}
 
-			int iconIndex = chatIconManager.chatIconIndex(iconIds[team - 1]);
-			if (iconIndex != -1)
+			if (!newText.equals(text))
 			{
-				child.setText(text + " <img=" + iconIndex + ">");
+				child.setText(newText);
 			}
 		}
+	}
+
+	/**
+	 * Removes this plugin's img tags including the space we prepend to them in
+	 * widget list entries.
+	 */
+	private String stripOwnListTags(String text)
+	{
+		for (int id : iconIds)
+		{
+			int iconIndex = chatIconManager.chatIconIndex(id);
+			if (iconIndex != -1)
+			{
+				text = text.replace(" <img=" + iconIndex + ">", "");
+			}
+		}
+		return text;
 	}
 
 	@Subscribe
