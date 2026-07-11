@@ -67,8 +67,11 @@ public class BingoTeamIconsPlugin extends Plugin
 
 	// "Player received a drop: ..." / "Player received a new collection log item: ..."
 	// / "Player received special loot from a raid: ..."
+	// / pets: "Player has a funny feeling like he's being followed" (and the
+	// "would have been followed" dupe) / "Player feels something weird sneaking
+	// into her backpack"
 	private static final Pattern BROADCAST_PATTERN = Pattern.compile(
-		"^(.+?) received (?:a drop|a new collection log item|special loot from a raid):");
+		"^(.+?) (?:received (?:a drop|a new collection log item|special loot from a raid):|has a funny feeling|feels something weird sneaking)");
 
 	@Inject
 	private Client client;
