@@ -42,12 +42,11 @@ final class TeamIconFactory
 	{
 		BufferedImage image = new BufferedImage(BADGE_SIZE, BADGE_SIZE, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = image.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
 		g.setColor(color);
-		g.fillOval(0, 0, BADGE_SIZE - 1, BADGE_SIZE - 1);
+		g.fillOval(0, 1, BADGE_SIZE - 2, BADGE_SIZE - 2);
 		g.setColor(OUTLINE_COLOR);
-		g.drawOval(0, 0, BADGE_SIZE - 2, BADGE_SIZE - 2);
+		g.drawOval(0, 1, BADGE_SIZE - 2, BADGE_SIZE - 2);
 
 		g.dispose();
 		return image;
