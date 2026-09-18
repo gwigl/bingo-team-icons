@@ -1,5 +1,6 @@
 package com.bingoteamicons;
 
+import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -51,8 +52,8 @@ import net.runelite.client.util.Text;
 @Slf4j
 @PluginDescriptor(
 	name = "Bingo Team Icons",
-	description = "Shows a team badge next to player names in chat based on their bingo team",
-	tags = {"bingo", "team", "clan", "icon", "chat", "event"}
+	description = "Colored team badges for bingo events, in chat, on the friends and clan lists, and above players' heads",
+	tags = {"bingo", "team", "clan", "icon", "chat", "event", "roster", "badge", "friends", "overhead"}
 )
 public class BingoTeamIconsPlugin extends Plugin
 {
@@ -113,6 +114,12 @@ public class BingoTeamIconsPlugin extends Plugin
 	@Inject
 	private BingoTeamIconsConfig config;
 
+	@Inject
+	private BingoTeamIconsRosterStore rosterStore;
+
+	@Inject
+	private Gson gson;
+
 	// iconIds[team - 1] = id returned by ChatIconManager; icons are registered once
 	// and kept for the lifetime of the client, since they cannot be unregistered.
 	// Color changes swap the icon image in place via updateChatIcon.
@@ -126,6 +133,10 @@ public class BingoTeamIconsPlugin extends Plugin
 	// team of the friends list row currently being laid out, between the
 	// friendsChatSetText and friendsChatSetPosition script callbacks
 	private Integer currentlyLayoutingTeam;
+
+	// Non-zero while a bulk apply is writing many keys at once, so the resulting
+	// flood of ConfigChanged events collapses into one propagation. EDT only.
+	private int configApplyDepth;
 
 	@Provides
 	BingoTeamIconsConfig provideConfig(ConfigManager configManager)
@@ -157,7 +168,8 @@ public class BingoTeamIconsPlugin extends Plugin
 		rebuildFriendsList();
 		rebuildClanLists();
 
-		panel = new BingoTeamIconsPanel(this, configManager, colorPickerManager);
+		panel = new BingoTeamIconsPanel(this, configManager, colorPickerManager,
+			rosterStore, new BingoTeamIconsSyncCodec(gson));
 		navButton = NavigationButton.builder()
 			.tooltip("Bingo Team Icons")
 			.icon(TeamIconFactory.createPanelIcon())
@@ -190,17 +202,70 @@ public class BingoTeamIconsPlugin extends Plugin
 			return;
 		}
 
-		if (event.getKey().endsWith("Color"))
+		if (configApplyDepth > 0)
+		{
+			return;
+		}
+
+		String key = event.getKey();
+		if (key.endsWith("Color"))
 		{
 			clientThread.invokeLater(this::updateIconImages);
 			return;
 		}
 
+		// Team names and the preset blob change nothing about what gets tagged in
+		// game. Without these the default-deny funnel below would retag the whole
+		// chat buffer on every keystroke in a team name field.
+		if (key.endsWith("Label") || BingoTeamIconsRosterStore.PRESETS_KEY.equals(key))
+		{
+			return;
+		}
+
+		propagateRosterChange();
+	}
+
+	private void propagateRosterChange()
+	{
 		rebuildPlayerTeams();
 		clientThread.invokeLater(this::retagChatHistory);
 		rebuildFriendsList();
 		rebuildClanLists();
 		refreshPanelOnlineCounts();
+	}
+
+	/**
+	 * Runs a batch of config writes as a single logical change. Importing a roster
+	 * touches up to thirty keys, and each one would otherwise retag the chat buffer
+	 * and redraw the friends and clan lists.
+	 *
+	 * <p>Must be called on the EDT, which is where the panel's actions run.
+	 */
+	void applyBulkConfigChange(Runnable writes)
+	{
+		configApplyDepth++;
+		try
+		{
+			writes.run();
+		}
+		finally
+		{
+			if (--configApplyDepth == 0)
+			{
+				try
+				{
+					// propagate unconditionally: a partial apply still has to leave
+					// the roster matching whatever actually landed in config
+					propagateRosterChange();
+					clientThread.invokeLater(this::updateIconImages);
+				}
+				catch (RuntimeException ex)
+				{
+					// reconcile regardless, but never mask the original failure
+					log.warn("failed to propagate bulk config change", ex);
+				}
+			}
+		}
 	}
 
 	@Subscribe
