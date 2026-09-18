@@ -6,20 +6,16 @@ import java.awt.Dimension;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import net.runelite.client.util.Filepath;
 
 /**
  * The import and export dialogs. Kept out of the panel so the roster editor
@@ -204,31 +200,30 @@ final class BingoTeamIconsSyncDialogs
 
 	private static void saveToFile(Component parent, String code)
 	{
-		JFileChooser chooser = new JFileChooser();
-		chooser.setDialogTitle("Save team code");
-		chooser.setSelectedFile(new File("bingo-teams." + EXTENSION));
-		chooser.setFileFilter(new FileNameExtensionFilter("Bingo team code (*." + EXTENSION + ")", EXTENSION));
+		List<Filepath> picked = new Filepath.Chooser()
+			.setIsSave()
+			.setAcceptsFiles()
+			.setDialogTitle("Save team code")
+			.setFileName("bingo-teams." + EXTENSION)
+			.addExtensionFilter("Bingo team code (*." + EXTENSION + ")", EXTENSION)
+			.setDefaultExtension(EXTENSION)
+			.showDialog(parent);
 
-		if (chooser.showSaveDialog(parent) != JFileChooser.APPROVE_OPTION)
+		if (picked.isEmpty())
 		{
 			return;
 		}
 
-		File file = chooser.getSelectedFile();
-		if (!file.getName().toLowerCase().endsWith("." + EXTENSION))
-		{
-			file = new File(file.getParentFile(), file.getName() + "." + EXTENSION);
-		}
-
+		Filepath file = picked.get(0);
 		if (file.exists() && !confirm(parent, "Overwrite file",
-			file.getName() + " already exists. Overwrite it?"))
+			file.getFileName() + " already exists. Overwrite it?"))
 		{
 			return;
 		}
 
-		try (Writer writer = Files.newBufferedWriter(file.toPath(), StandardCharsets.UTF_8))
+		try
 		{
-			writer.write(code);
+			file.write(code);
 		}
 		catch (IOException ex)
 		{
@@ -238,30 +233,36 @@ final class BingoTeamIconsSyncDialogs
 
 	private static String loadFromFile(Component parent)
 	{
-		JFileChooser chooser = new JFileChooser();
-		chooser.setDialogTitle("Load team code");
-		chooser.setFileFilter(new FileNameExtensionFilter("Bingo team code (*." + EXTENSION + ")", EXTENSION));
+		List<Filepath> picked = new Filepath.Chooser()
+			.setIsOpen()
+			.setAcceptsFiles()
+			.setDialogTitle("Load team code")
+			.addExtensionFilter("Bingo team code (*." + EXTENSION + ")", EXTENSION)
+			.showDialog(parent);
 
-		if (chooser.showOpenDialog(parent) != JFileChooser.APPROVE_OPTION)
+		if (picked.isEmpty())
 		{
 			return null;
 		}
 
-		File file = chooser.getSelectedFile();
-		if (file.length() > MAX_FILE_CHARS)
-		{
-			showError(parent, "That file is too large to be a team code.");
-			return null;
-		}
-
+		Filepath file = picked.get(0);
 		StringBuilder text = new StringBuilder();
-		try (BufferedReader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8))
+		try
 		{
-			char[] buffer = new char[8192];
-			int read;
-			while ((read = reader.read(buffer)) > 0 && text.length() <= MAX_FILE_CHARS)
+			if (file.size() > MAX_FILE_CHARS)
 			{
-				text.append(buffer, 0, read);
+				showError(parent, "That file is too large to be a team code.");
+				return null;
+			}
+
+			try (BufferedReader reader = file.openBufferedReader())
+			{
+				char[] buffer = new char[8192];
+				int read;
+				while ((read = reader.read(buffer)) > 0 && text.length() <= MAX_FILE_CHARS)
+				{
+					text.append(buffer, 0, read);
+				}
 			}
 		}
 		catch (IOException ex)
